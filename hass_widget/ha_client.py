@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import requests
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Dict, Any
 
 
 class HomeAssistantError(RuntimeError):
@@ -12,9 +12,10 @@ class HomeAssistantError(RuntimeError):
 class HomeAssistantClient:
     """Minimal client to interact with the Home Assistant REST API."""
 
-    def __init__(self, base_url: str, token: str) -> None:
+    def __init__(self, base_url: str, token: str, proxies: Dict[str, str] | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token.strip()
+        self._proxies = proxies or None
 
     @property
     def _headers(self) -> dict:
@@ -25,7 +26,12 @@ class HomeAssistantClient:
 
     def validate(self) -> None:
         """Ensure the configuration is usable by pinging the API."""
-        response = requests.get(f"{self.base_url}/api/config", headers=self._headers, timeout=10)
+        response = requests.get(
+            f"{self.base_url}/api/config",
+            headers=self._headers,
+            timeout=10,
+            proxies=self._proxies,
+        )
         if response.status_code != 200:
             raise HomeAssistantError(
                 f"Failed to connect to Home Assistant: {response.status_code} {response.text}"
@@ -33,7 +39,12 @@ class HomeAssistantClient:
 
     def list_entities(self) -> List[Tuple[str, str]]:
         """Return available entities as (entity_id, friendly_name)."""
-        response = requests.get(f"{self.base_url}/api/states", headers=self._headers, timeout=10)
+        response = requests.get(
+            f"{self.base_url}/api/states",
+            headers=self._headers,
+            timeout=10,
+            proxies=self._proxies,
+        )
         if response.status_code != 200:
             raise HomeAssistantError(
                 f"Unable to list entities: {response.status_code} {response.text}"
@@ -57,6 +68,7 @@ class HomeAssistantClient:
             headers=self._headers,
             json={"entity_id": entity_id},
             timeout=10,
+            proxies=self._proxies,
         )
         if response.status_code not in (200, 201):
             raise HomeAssistantError(
@@ -69,11 +81,34 @@ class HomeAssistantClient:
             headers=self._headers,
             json=data,
             timeout=10,
+            proxies=self._proxies,
         )
         if response.status_code not in (200, 201):
             raise HomeAssistantError(
                 f"Failed to call {domain}.{service}: {response.status_code} {response.text}"
             )
+
+    def list_notifications(self) -> List[Dict[str, Any]]:
+        """Return the list of persistent notifications."""
+
+        response = requests.get(
+            f"{self.base_url}/api/persistent_notification",
+            headers=self._headers,
+            timeout=10,
+            proxies=self._proxies,
+        )
+        if response.status_code not in (200, 201):
+            raise HomeAssistantError(
+                f"Failed to fetch notifications: {response.status_code} {response.text}"
+            )
+        data = response.json() or {}
+        if isinstance(data, list):
+            notifications = data
+        else:
+            notifications = data.get("notifications")
+        if isinstance(notifications, list):
+            return [n for n in notifications if isinstance(n, dict)]
+        return []
 
 
 def format_entities(entities: Iterable[Tuple[str, str]]) -> List[str]:

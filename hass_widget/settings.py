@@ -27,6 +27,8 @@ class SettingsDialog(QtWidgets.QDialog):
         self._token_input.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self._token_input.setPlaceholderText("Long-lived access token")
 
+        self._http_proxy_input = QtWidgets.QLineEdit(self._config.http_proxy)
+        self._https_proxy_input = QtWidgets.QLineEdit(self._config.https_proxy)
         self._available_list = QtWidgets.QListWidget()
         self._selected_list = QtWidgets.QListWidget()
 
@@ -49,6 +51,8 @@ class SettingsDialog(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         form.addRow("Instance URL", self._url_input)
         form.addRow("API Token", self._token_input)
+        form.addRow("HTTP Proxy", self._http_proxy_input)
+        form.addRow("HTTPS Proxy", self._https_proxy_input)
 
         lists_layout = QtWidgets.QHBoxLayout()
         lists_layout.addWidget(self._available_list)
@@ -100,7 +104,11 @@ class SettingsDialog(QtWidgets.QDialog):
         self._populate_selected()
 
     def _refresh_entities(self) -> None:
-        client = HomeAssistantClient(self._url_input.text(), self._token_input.text())
+        client = HomeAssistantClient(
+            self._url_input.text(),
+            self._token_input.text(),
+            proxies=self._current_proxies() or None,
+        )
         try:
             self._available_entities = client.list_entities()
         except HomeAssistantError as exc:
@@ -116,10 +124,22 @@ class SettingsDialog(QtWidgets.QDialog):
     def _save(self) -> None:
         self._config.base_url = self._url_input.text().strip()
         self._config.api_token = self._token_input.text().strip()
+        self._config.http_proxy = self._http_proxy_input.text().strip()
+        self._config.https_proxy = self._https_proxy_input.text().strip()
         self._config.entities = [self._selected_list.item(i).text() for i in range(self._selected_list.count())]
         save_config(self._config)
         self.configuration_changed.emit(self._config)
         self.accept()
+
+    def _current_proxies(self) -> dict[str, str]:
+        proxies: dict[str, str] = {}
+        http_proxy = self._http_proxy_input.text().strip()
+        https_proxy = self._https_proxy_input.text().strip()
+        if http_proxy:
+            proxies["http"] = http_proxy
+        if https_proxy:
+            proxies["https"] = https_proxy
+        return proxies
 
 
 __all__ = ["SettingsDialog"]
