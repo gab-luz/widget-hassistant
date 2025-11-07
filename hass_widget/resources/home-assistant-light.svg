@@ -1,10 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <g fill="none" stroke="none" stroke-width="0" color="#000000">
-    <path fill="currentColor" d="M128 20 24 112v124h88v-64h32v64h88V112Zm76 100v100h-48v-64H100v64H52V120l76-66 76 66Z"/>
-    <path fill="currentColor" d="M128 72 88 108v56h24v-36h32v36h24v-56zm0 16 24 20v40h-8v-36h-32v36h-8v-40z" opacity="0.9"/>
-    <circle fill="currentColor" cx="84" cy="172" r="14"/>
-    <circle fill="currentColor" cx="128" cy="124" r="14"/>
-    <circle fill="currentColor" cx="172" cy="172" r="14"/>
-    <path fill="currentColor" d="m96 164 20-26 20 26 20-26 20 26-12 8-8-10-20 26-20-26-8 10z" opacity="0.85"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 48 48"><path fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" d="M41.53 21.37L26.03 7.127a3 3 0 0 0-4.06 0L6.47 21.371a3 3 0 0 0-.97 2.209v16.084a2 2 0 0 0 2 2h33a2 2 0 0 0 2-2V23.579a3 3 0 0 0-.97-2.209"/><circle cx="24" cy="22.822" r="2.944" fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round"/><circle cx="33.147" cy="28.984" r="2.944" fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round"/><circle cx="14.853" cy="32.517" r="2.944" fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round"/><path fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round" d="M24 25.766v15.898m-7.066-7.066L24 41.664m0-3.533l7.066-7.065"/></svg>

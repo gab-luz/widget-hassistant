@@ -1,6 +1,9 @@
 """System tray widget for controlling Home Assistant entities."""
 from __future__ import annotations
 
+from pathlib import Path
+
+import darkdetect
 from PyQt6 import QtGui, QtWidgets
 
 from .config import WidgetConfig
@@ -8,11 +11,21 @@ from .ha_client import HomeAssistantClient, HomeAssistantError
 from .settings import SettingsDialog
 
 
+def get_resource_path(name: str) -> str:
+    """Return the path to a resource file."""
+    return str(Path(__file__).parent / "resources" / name)
+
+
 class TrayIcon(QtWidgets.QSystemTrayIcon):
     """Tray icon that exposes Home Assistant entities as menu actions."""
 
     def __init__(self, config: WidgetConfig, app: QtWidgets.QApplication) -> None:
-        super().__init__(QtGui.QIcon.fromTheme("home"), parent=app)
+        if darkdetect.isDark():
+            icon = QtGui.QIcon(get_resource_path("home-assistant-dark.svg"))
+        else:
+            icon = QtGui.QIcon(get_resource_path("home-assistant-light.svg"))
+
+        super().__init__(icon, parent=app)
         self._app = app
         self._config = config
         self._menu = QtWidgets.QMenu()
