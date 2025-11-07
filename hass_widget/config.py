@@ -1,0 +1,62 @@
+"""Configuration management for the Home Assistant tray widget."""
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List
+
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "hassistant-widget"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
+
+@dataclass
+class WidgetConfig:
+    """Dataclass representing persisted configuration values."""
+
+    base_url: str = ""
+    api_token: str = ""
+    entities: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "base_url": self.base_url,
+            "api_token": self.api_token,
+            "entities": self.entities,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> "WidgetConfig":
+        if not data:
+            return cls()
+        return cls(
+            base_url=data.get("base_url", ""),
+            api_token=data.get("api_token", ""),
+            entities=list(dict.fromkeys(data.get("entities", []))),
+        )
+
+
+def load_config() -> WidgetConfig:
+    """Load configuration from disk."""
+
+    if not CONFIG_FILE.exists():
+        return WidgetConfig()
+
+    try:
+        with CONFIG_FILE.open("r", encoding="utf-8") as fp:
+            data = json.load(fp)
+    except (OSError, json.JSONDecodeError):
+        return WidgetConfig()
+    return WidgetConfig.from_dict(data)
+
+
+def save_config(config: WidgetConfig) -> None:
+    """Persist configuration to disk."""
+
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with CONFIG_FILE.open("w", encoding="utf-8") as fp:
+        json.dump(config.to_dict(), fp, indent=2)
+
+
+__all__ = ["WidgetConfig", "load_config", "save_config", "CONFIG_FILE"]
