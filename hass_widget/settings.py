@@ -1,12 +1,12 @@
 """Settings dialog for configuring the Home Assistant tray widget."""
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import List, Tuple
 
 from PyQt6 import QtCore, QtWidgets
 
-from .config import WidgetConfig, build_proxy_map, save_config
-from .ha_client import EntityState, HomeAssistantClient, HomeAssistantError
+from .config import WidgetConfig, save_config
+from .ha_client import HomeAssistantClient, HomeAssistantError
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -20,19 +20,12 @@ class SettingsDialog(QtWidgets.QDialog):
         self.resize(600, 400)
 
         self._config = config
-        self._available_entities: List[EntityState] = []
-        self._entity_lookup: Dict[str, EntityState] = {}
+        self._available_entities: List[Tuple[str, str]] = []
 
         self._url_input = QtWidgets.QLineEdit(self._config.base_url)
         self._token_input = QtWidgets.QLineEdit(self._config.api_token)
         self._token_input.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self._token_input.setPlaceholderText("Long-lived access token")
-
-        self._proxy_host_input = QtWidgets.QLineEdit(self._config.proxy_host)
-        self._proxy_port_input = QtWidgets.QLineEdit(self._config.proxy_port)
-        self._proxy_username_input = QtWidgets.QLineEdit(self._config.proxy_username)
-        self._proxy_password_input = QtWidgets.QLineEdit(self._config.proxy_password)
-        self._proxy_password_input.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
 
         self._available_list = QtWidgets.QListWidget()
         self._selected_list = QtWidgets.QListWidget()
@@ -56,10 +49,6 @@ class SettingsDialog(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         form.addRow("Instance URL", self._url_input)
         form.addRow("API Token", self._token_input)
-        form.addRow("Proxy Host", self._proxy_host_input)
-        form.addRow("Proxy Port", self._proxy_port_input)
-        form.addRow("Proxy Username", self._proxy_username_input)
-        form.addRow("Proxy Password", self._proxy_password_input)
 
         lists_layout = QtWidgets.QHBoxLayout()
         lists_layout.addWidget(self._available_list)
@@ -94,11 +83,7 @@ class SettingsDialog(QtWidgets.QDialog):
     def _populate_selected(self) -> None:
         self._selected_list.clear()
         for entity_id in self._config.entities:
-            display = self._entity_lookup.get(entity_id)
-            item = QtWidgets.QListWidgetItem(display.friendly_name if display else entity_id)
-            item.setData(QtCore.Qt.ItemDataRole.UserRole, entity_id)
-            item.setToolTip(entity_id)
-            self._selected_list.addItem(item)
+            self._selected_list.addItem(entity_id)
 
     def _add_entities(self) -> None:
         for item in self._available_list.selectedItems():
@@ -109,22 +94,13 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _remove_entities(self) -> None:
         for item in self._selected_list.selectedItems():
-            entity_id = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            entity_id = item.text()
             if entity_id in self._config.entities:
                 self._config.entities.remove(entity_id)
         self._populate_selected()
 
     def _refresh_entities(self) -> None:
-        client = HomeAssistantClient(
-            self._url_input.text(),
-            self._token_input.text(),
-            proxies=build_proxy_map(
-                self._proxy_host_input.text(),
-                self._proxy_port_input.text(),
-                self._proxy_username_input.text(),
-                self._proxy_password_input.text(),
-            ),
-        )
+        client = HomeAssistantClient(self._url_input.text(), self._token_input.text())
         try:
             self._available_entities = client.list_entities()
         except HomeAssistantError as exc:
@@ -132,26 +108,15 @@ class SettingsDialog(QtWidgets.QDialog):
             return
 
         self._available_list.clear()
-        for state in self._available_entities:
-            item = QtWidgets.QListWidgetItem(state.friendly_name)
-            item.setData(QtCore.Qt.ItemDataRole.UserRole, state.entity_id)
-            item.setToolTip(state.entity_id)
+        for entity_id, friendly_name in self._available_entities:
+            item = QtWidgets.QListWidgetItem(friendly_name)
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, entity_id)
             self._available_list.addItem(item)
-
-        self._entity_lookup = {state.entity_id: state for state in self._available_entities}
-        self._populate_selected()
 
     def _save(self) -> None:
         self._config.base_url = self._url_input.text().strip()
         self._config.api_token = self._token_input.text().strip()
-        self._config.proxy_host = self._proxy_host_input.text().strip()
-        self._config.proxy_port = self._proxy_port_input.text().strip()
-        self._config.proxy_username = self._proxy_username_input.text().strip()
-        self._config.proxy_password = self._proxy_password_input.text().strip()
-        self._config.entities = [
-            self._selected_list.item(i).data(QtCore.Qt.ItemDataRole.UserRole)
-            for i in range(self._selected_list.count())
-        ]
+        self._config.entities = [self._selected_list.item(i).text() for i in range(self._selected_list.count())]
         save_config(self._config)
         self.configuration_changed.emit(self._config)
         self.accept()
