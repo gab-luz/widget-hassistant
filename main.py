@@ -12,6 +12,7 @@ from hass_widget.tray import TrayIcon
 
 def main() -> int:
     app = QtWidgets.QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
     config = load_config()

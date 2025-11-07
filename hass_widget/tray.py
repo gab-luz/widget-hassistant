@@ -51,8 +51,16 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
                 self._menu.removeAction(action)
 
         if self._config.entities:
+            try:
+                client = HomeAssistantClient(self._config.base_url, self._config.api_token)
+                all_entities = client.list_entities()
+                entity_map = {entity_id: friendly_name for entity_id, friendly_name in all_entities}
+            except HomeAssistantError:
+                entity_map = {}
+
             for entity_id in self._config.entities:
-                action = QtGui.QAction(entity_id, self._menu)
+                friendly_name = entity_map.get(entity_id, entity_id)
+                action = QtGui.QAction(friendly_name, self._menu)
                 action.triggered.connect(lambda checked=False, e=entity_id: self._toggle_entity(e))
                 self._menu.insertAction(self._settings_action, action)
             self._menu.insertSeparator(self._settings_action)

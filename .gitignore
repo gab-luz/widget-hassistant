@@ -1,2 +1,5 @@
 .venv
 venv
+uv.lock
+.git
+hass_widget/__pycache__
