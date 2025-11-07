@@ -7,5 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "darkdetect>=0.8.0",
     "pyqt6>=6.5",
+    "qtawesome>=1.4.0",
     "requests>=2.31",
 ]
