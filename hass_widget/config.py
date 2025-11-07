@@ -18,12 +18,16 @@ class WidgetConfig:
     base_url: str = ""
     api_token: str = ""
     entities: List[str] = field(default_factory=list)
+    http_proxy: str = ""
+    https_proxy: str = ""
 
     def to_dict(self) -> dict:
         return {
             "base_url": self.base_url,
             "api_token": self.api_token,
             "entities": self.entities,
+            "http_proxy": self.http_proxy,
+            "https_proxy": self.https_proxy,
         }
 
     @classmethod
@@ -34,7 +38,19 @@ class WidgetConfig:
             base_url=data.get("base_url", ""),
             api_token=data.get("api_token", ""),
             entities=list(dict.fromkeys(data.get("entities", []))),
+            http_proxy=data.get("http_proxy", ""),
+            https_proxy=data.get("https_proxy", ""),
         )
+
+    def build_proxies(self) -> dict[str, str]:
+        """Return a requests-compatible proxies mapping."""
+
+        proxies: dict[str, str] = {}
+        if self.http_proxy:
+            proxies["http"] = self.http_proxy
+        if self.https_proxy:
+            proxies["https"] = self.https_proxy
+        return proxies
 
 
 def load_config() -> WidgetConfig:

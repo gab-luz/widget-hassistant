@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import darkdetect
-from PyQt6 import QtGui, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from .config import WidgetConfig
 from .ha_client import HomeAssistantClient, HomeAssistantError
@@ -39,7 +39,15 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         self._exit_action = self._menu.addAction("Quit")
         self._exit_action.triggered.connect(self._quit)
 
+        self._known_notifications: set[str] = set()
+        self._notification_timer = QtCore.QTimer(self)
+        self._notification_timer.setInterval(30_000)
+        self._notification_timer.timeout.connect(self._check_notifications)
+        self._notification_timer.start()
+
         self.update_entities()
+        self._initialize_notifications()
+        QtCore.QTimer.singleShot(0, self._check_notifications)
 
     # ----- Menu construction ------------------------------------------------
 
@@ -52,7 +60,7 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
 
         if self._config.entities:
             try:
-                client = HomeAssistantClient(self._config.base_url, self._config.api_token)
+                client = self._create_client()
                 all_entities = client.list_entities()
                 entity_map = {entity_id: friendly_name for entity_id, friendly_name in all_entities}
             except HomeAssistantError:
@@ -80,9 +88,15 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
     def _on_configuration_changed(self, config: WidgetConfig) -> None:
         self._config = config
         self.update_entities()
+        self._initialize_notifications()
+        self._check_notifications()
 
     def _toggle_entity(self, entity_id: str) -> None:
-        client = HomeAssistantClient(self._config.base_url, self._config.api_token)
+        try:
+            client = self._create_client()
+        except HomeAssistantError as exc:
+            self.showMessage("Home Assistant", str(exc), QtWidgets.QSystemTrayIcon.MessageIcon.Warning)
+            return
         try:
             client.toggle_entity(entity_id)
             self.showMessage("Home Assistant", f"Toggled {entity_id}", QtWidgets.QSystemTrayIcon.MessageIcon.Information)
@@ -96,6 +110,57 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
     def _quit(self) -> None:
         self.hide()
         self._app.quit()
+
+    def _create_client(self) -> HomeAssistantClient:
+        if not self._config.base_url or not self._config.api_token:
+            raise HomeAssistantError("Home Assistant URL or token is not configured.")
+        proxies = self._config.build_proxies()
+        return HomeAssistantClient(
+            self._config.base_url,
+            self._config.api_token,
+            proxies=proxies or None,
+        )
+
+    def _initialize_notifications(self) -> None:
+        self._known_notifications.clear()
+        if not self._config.base_url or not self._config.api_token:
+            return
+        try:
+            client = self._create_client()
+            notifications = client.list_notifications()
+        except HomeAssistantError:
+            return
+        for notification in notifications:
+            notification_id = str(notification.get("notification_id", "")).strip()
+            if notification_id:
+                self._known_notifications.add(notification_id)
+
+    def _check_notifications(self) -> None:
+        if not self._config.base_url or not self._config.api_token:
+            return
+        try:
+            client = self._create_client()
+            notifications = client.list_notifications()
+        except HomeAssistantError:
+            return
+
+        current_ids: set[str] = set()
+        for notification in notifications:
+            notification_id = str(notification.get("notification_id", "")).strip()
+            if not notification_id:
+                continue
+            current_ids.add(notification_id)
+            if notification_id in self._known_notifications:
+                continue
+            title = str(notification.get("title") or "Home Assistant")
+            message = str(notification.get("message") or "")
+            self.showMessage(title, message, QtWidgets.QSystemTrayIcon.MessageIcon.Information)
+            self._known_notifications.add(notification_id)
+
+        if current_ids:
+            self._known_notifications.intersection_update(current_ids)
+        else:
+            self._known_notifications.clear()
 
 
 __all__ = ["TrayIcon"]
