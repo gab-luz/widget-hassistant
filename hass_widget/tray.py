@@ -64,17 +64,17 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
                 self._menu.removeAction(action)
 
         panel_entities: list[PanelEntity] = []
-        if self._config.entities:
-            client: HomeAssistantClient | None = None
+        entity_map: dict[str, str] = {}
+        icon_map: dict[str, QtGui.QIcon | None] = {}
+        client: HomeAssistantClient | None = None
+        if self._config.base_url and self._config.api_token:
             try:
                 client = self._create_client()
                 all_states = client.list_entity_states()
             except HomeAssistantError:
-                entity_map = {}
-                self._entity_states = {}
                 client = None
+                self._entity_states = {}
             else:
-                entity_map = {}
                 state_map: dict[str, dict[str, Any]] = {}
                 for state in all_states:
                     entity_id = state.get("entity_id")
@@ -82,19 +82,29 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
                         continue
                     attributes = state.get("attributes") or {}
                     friendly_name = attributes.get("friendly_name") or entity_id
-                    entity_map[entity_id] = str(friendly_name)
+                    friendly_name = str(friendly_name)
+                    entity_map[entity_id] = friendly_name
                     state_map[entity_id] = state
                 self._entity_states = state_map
 
+                for entity_id, friendly_name in entity_map.items():
+                    icon = self._entity_icon(entity_id, client)
+                    icon_map[entity_id] = icon
+                    panel_entities.append(
+                        PanelEntity(
+                            entity_id=entity_id,
+                            friendly_name=friendly_name,
+                            icon=icon,
+                        )
+                    )
+        else:
+            self._entity_states = {}
+
+        if not panel_entities and self._config.entities:
             for entity_id in self._config.entities:
                 friendly_name = entity_map.get(entity_id, entity_id)
                 icon = self._entity_icon(entity_id, client)
-                if icon is not None:
-                    action = QtGui.QAction(icon, friendly_name, self._menu)
-                else:
-                    action = QtGui.QAction(friendly_name, self._menu)
-                action.triggered.connect(lambda checked=False, e=entity_id: self._toggle_entity(e))
-                self._menu.insertAction(self._settings_action, action)
+                icon_map.setdefault(entity_id, icon)
                 panel_entities.append(
                     PanelEntity(
                         entity_id=entity_id,
@@ -102,9 +112,22 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
                         icon=icon,
                     )
                 )
+
+        if self._config.entities:
+            for entity_id in self._config.entities:
+                friendly_name = entity_map.get(entity_id, entity_id)
+                if entity_id in icon_map:
+                    icon = icon_map[entity_id]
+                else:
+                    icon = self._entity_icon(entity_id, client)
+                if icon is not None:
+                    action = QtGui.QAction(icon, friendly_name, self._menu)
+                else:
+                    action = QtGui.QAction(friendly_name, self._menu)
+                action.triggered.connect(lambda checked=False, e=entity_id: self._toggle_entity(e))
+                self._menu.insertAction(self._settings_action, action)
             self._menu.insertSeparator(self._settings_action)
         else:
-            self._entity_states = {}
             placeholder = QtGui.QAction("No entities configured", self._menu)
             placeholder.setEnabled(False)
             self._menu.insertAction(self._settings_action, placeholder)

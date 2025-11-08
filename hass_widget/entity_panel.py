@@ -74,11 +74,16 @@ class EntitiesPanel(QtWidgets.QDialog):
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Home Assistant Entities")
-        self.setWindowFlag(QtCore.Qt.WindowType.Tool)
-        self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint)
-        self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlag(QtCore.Qt.WindowType.Tool, True)
+        self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, True)
+        self.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, True)
+        self.setWindowFlag(QtCore.Qt.WindowType.Popup, True)
+        platform_name = QtGui.QGuiApplication.platformName().lower()
+        if "wayland" in platform_name:
+            self.setWindowFlag(QtCore.Qt.WindowType.BypassWindowManagerHint, True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setModal(False)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
         self._all_entities: List[PanelEntity] = []
 
@@ -158,6 +163,7 @@ class EntitiesPanel(QtWidgets.QDialog):
         self._fade_animation.setEndValue(1.0)
         super().show()
         self.raise_()
+        self.activateWindow()
         self._fade_animation.start()
         self._search_input.setFocus(QtCore.Qt.FocusReason.ActiveWindowFocusReason)
 
