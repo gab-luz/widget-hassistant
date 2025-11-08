@@ -20,6 +20,12 @@ class WidgetConfig:
     entities: List[str] = field(default_factory=list)
     http_proxy: str = ""
     https_proxy: str = ""
+    tray_icon_theme: str = "auto"
+    panel_refresh_minutes: int = 5
+    receive_admin_notifications: bool = True
+    use_agent: bool = False
+    agent_name: str = ""
+    agent_metrics: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -28,6 +34,12 @@ class WidgetConfig:
             "entities": self.entities,
             "http_proxy": self.http_proxy,
             "https_proxy": self.https_proxy,
+            "tray_icon_theme": self.tray_icon_theme,
+            "panel_refresh_minutes": self.panel_refresh_minutes,
+            "receive_admin_notifications": self.receive_admin_notifications,
+            "use_agent": self.use_agent,
+            "agent_name": self.agent_name,
+            "agent_metrics": self.agent_metrics,
         }
 
     @classmethod
@@ -40,6 +52,14 @@ class WidgetConfig:
             entities=list(dict.fromkeys(data.get("entities", []))),
             http_proxy=data.get("http_proxy", ""),
             https_proxy=data.get("https_proxy", ""),
+            tray_icon_theme=data.get("tray_icon_theme", "auto") or "auto",
+            panel_refresh_minutes=int(data.get("panel_refresh_minutes", 5) or 5),
+            receive_admin_notifications=bool(
+                data.get("receive_admin_notifications", True)
+            ),
+            use_agent=bool(data.get("use_agent", False)),
+            agent_name=str(data.get("agent_name", "")),
+            agent_metrics=list(dict.fromkeys(data.get("agent_metrics", []))),
         )
 
     def build_proxies(self) -> dict[str, str]:

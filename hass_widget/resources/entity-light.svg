@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <defs>
+    <linearGradient id="lightGlow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffe066" />
+      <stop offset="100%" stop-color="#fab005" />
+    </linearGradient>
+  </defs>
+  <path d="M12 3a6 6 0 0 0-3 11.2V16a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-1.8A6 6 0 0 0 12 3z" fill="url(#lightGlow)" stroke="#f08c00" stroke-width="1" />
+  <rect x="9.5" y="17" width="5" height="1.5" rx="0.75" fill="#495057" />
+  <rect x="10" y="19" width="4" height="1.5" rx="0.75" fill="#495057" />
+</svg>

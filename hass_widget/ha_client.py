@@ -1,6 +1,8 @@
 """HTTP client for interacting with Home Assistant."""
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import requests
 from typing import Iterable, List, Tuple, Dict, Any
 
@@ -55,6 +57,18 @@ class HomeAssistantClient:
             key=lambda item: item.get("attributes", {}).get("friendly_name", item.get("entity_id")),
         )
 
+    def list_entities(self) -> List[Tuple[str, str]]:
+        """Return entity IDs and friendly names sorted alphabetically."""
+        entities: List[Tuple[str, str]] = []
+        for state in self.list_entity_states():
+            entity_id = state.get("entity_id")
+            if not entity_id:
+                continue
+            attributes = state.get("attributes") or {}
+            friendly_name = attributes.get("friendly_name") or entity_id
+            entities.append((entity_id, str(friendly_name)))
+        return entities
+
     def toggle_entity(self, entity_id: str) -> None:
         """Trigger the toggle service for the provided entity."""
         domain = entity_id.split(".", 1)[0]
@@ -83,6 +97,45 @@ class HomeAssistantClient:
                 f"Failed to call {domain}.{service}: {response.status_code} {response.text}"
             )
 
+    def create_notification(
+        self, title: str, message: str, notification_id: str | None = None
+    ) -> None:
+        payload: Dict[str, Any] = {"title": title, "message": message}
+        if notification_id:
+            payload["notification_id"] = notification_id
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/services/persistent_notification/create",
+                headers=self._headers,
+                json=payload,
+                timeout=10,
+                proxies=self._proxies,
+            )
+        except requests.RequestException as exc:  # pragma: no cover - network error
+            raise HomeAssistantError(f"Failed to send notification: {exc}") from exc
+        if response.status_code not in (200, 201):
+            raise HomeAssistantError(
+                f"Failed to send notification: {response.status_code} {response.text}"
+            )
+
+    def set_state(
+        self, entity_id: str, state: str, attributes: Dict[str, Any] | None = None
+    ) -> None:
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/states/{entity_id}",
+                headers=self._headers,
+                json={"state": state, "attributes": attributes or {}},
+                timeout=10,
+                proxies=self._proxies,
+            )
+        except requests.RequestException as exc:  # pragma: no cover - network error
+            raise HomeAssistantError(f"Failed to update {entity_id}: {exc}") from exc
+        if response.status_code not in (200, 201):
+            raise HomeAssistantError(
+                f"Failed to update {entity_id}: {response.status_code} {response.text}"
+            )
+
     def list_notifications(self) -> List[Dict[str, Any]]:
         """Return the list of persistent notifications."""
 
@@ -104,6 +157,51 @@ class HomeAssistantClient:
         if isinstance(notifications, list):
             return [n for n in notifications if isinstance(n, dict)]
         return []
+
+    def fetch_icon(self, icon: str) -> bytes:
+        """Fetch a Material Design icon defined in Home Assistant attributes."""
+        icon = icon.strip()
+        if not icon:
+            raise HomeAssistantError("Icon name is empty.")
+        encoded_icon = quote(icon, safe="")
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/icon/{encoded_icon}",
+                headers=self._headers,
+                timeout=10,
+                proxies=self._proxies,
+            )
+        except requests.RequestException as exc:
+            raise HomeAssistantError(f"Failed to fetch icon {icon!r}: {exc}") from exc
+        if response.status_code != 200:
+            raise HomeAssistantError(
+                f"Failed to fetch icon {icon}: {response.status_code} {response.text}"
+            )
+        return response.content
+
+    def fetch_entity_picture(self, entity_picture: str) -> bytes:
+        """Fetch the binary contents of an entity picture."""
+        entity_picture = entity_picture.strip()
+        if not entity_picture:
+            raise HomeAssistantError("Entity picture path is empty.")
+        if entity_picture.startswith("http://") or entity_picture.startswith("https://"):
+            url = entity_picture
+        else:
+            url = f"{self.base_url}{entity_picture}"
+        try:
+            response = requests.get(
+                url,
+                headers=self._headers,
+                timeout=10,
+                proxies=self._proxies,
+            )
+        except requests.RequestException as exc:
+            raise HomeAssistantError(f"Failed to fetch entity picture {entity_picture!r}: {exc}") from exc
+        if response.status_code != 200:
+            raise HomeAssistantError(
+                f"Failed to fetch entity picture {entity_picture}: {response.status_code} {response.text}"
+            )
+        return response.content
 
 
 def format_entities(entities: Iterable[Tuple[str, str]]) -> List[str]:
