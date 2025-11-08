@@ -1,7 +1,6 @@
 """System tray widget for controlling Home Assistant entities."""
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Callable
 
 import darkdetect
@@ -9,47 +8,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from .config import WidgetConfig
 from .ha_client import HomeAssistantClient, HomeAssistantError
+from .icons import get_resource_path, icon_from_bytes, load_domain_icon
 from .settings import SettingsDialog
-
-
-def get_resource_path(name: str) -> str:
-    """Return the path to a resource file."""
-    return str(Path(__file__).parent / "resources" / name)
-
-
-DOMAIN_ICON_FILES: dict[str, str] = {
-    "automation": "entity-script.svg",
-    "binary_sensor": "entity-sensor.svg",
-    "button": "entity-button.svg",
-    "climate": "entity-climate.svg",
-    "cover": "entity-cover.svg",
-    "fan": "entity-fan.svg",
-    "input_boolean": "entity-switch.svg",
-    "light": "entity-light.svg",
-    "lock": "entity-lock.svg",
-    "media_player": "entity-media-player.svg",
-    "scene": "entity-scene.svg",
-    "script": "entity-script.svg",
-    "sensor": "entity-sensor.svg",
-    "switch": "entity-switch.svg",
-}
-
-DEFAULT_ENTITY_ICON = "entity-generic.svg"
-
-
-def _load_icon_from_resources(name: str) -> QtGui.QIcon:
-    icon = QtGui.QIcon(get_resource_path(name))
-    if icon.isNull():
-        return QtGui.QIcon()
-    return icon
-
-
-def _domain_icon_name(entity_id: str) -> str:
-    domain, _, _ = entity_id.partition(".")
-    icon_name = DOMAIN_ICON_FILES.get(domain)
-    if icon_name is None:
-        return DEFAULT_ENTITY_ICON
-    return icon_name
 
 
 class TrayIcon(QtWidgets.QSystemTrayIcon):
@@ -245,21 +205,21 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             cache_key = f"api:{self._config.base_url}:{entity_picture}"
             return self._cached_icon(
                 cache_key,
-                lambda: self._icon_from_bytes(client.fetch_entity_picture(entity_picture)),
+                lambda: icon_from_bytes(client.fetch_entity_picture(entity_picture)),
             )
         if icon_name:
             cache_key = f"api:{self._config.base_url}:{icon_name}"
             return self._cached_icon(
-                cache_key, lambda: self._icon_from_bytes(client.fetch_icon(icon_name))
+                cache_key, lambda: icon_from_bytes(client.fetch_icon(icon_name))
             )
         return None
 
     def _entity_icon_from_resources(self, entity_id: str) -> QtGui.QIcon | None:
-        icon_name = _domain_icon_name(entity_id)
-        cache_key = f"resource:{icon_name}"
+        domain, _, _ = entity_id.partition(".")
+        cache_key = f"resource:{domain}" if domain else f"resource:{entity_id}"
         icon = self._icon_cache.get(cache_key)
         if icon is None:
-            icon = _load_icon_from_resources(icon_name)
+            icon = load_domain_icon(entity_id)
             self._icon_cache[cache_key] = icon
         if icon.isNull():
             return None
@@ -279,13 +239,6 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             icon = QtGui.QIcon()
         self._icon_cache[cache_key] = icon
         return None if icon.isNull() else icon
-
-    @staticmethod
-    def _icon_from_bytes(data: bytes) -> QtGui.QIcon | None:
-        pixmap = QtGui.QPixmap()
-        if not pixmap.loadFromData(data):
-            return None
-        return QtGui.QIcon(pixmap)
 
 
 
