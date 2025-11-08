@@ -7,6 +7,7 @@ import darkdetect
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from .config import WidgetConfig
+from .entity_panel import EntitiesPanel, PanelEntity
 from .ha_client import HomeAssistantClient, HomeAssistantError
 from .icons import get_resource_path, icon_from_bytes, load_domain_icon
 from .settings import SettingsDialog
@@ -25,6 +26,8 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         self.activated.connect(self._on_activated)
 
         self._settings_dialog: SettingsDialog | None = None
+        self._entity_panel = EntitiesPanel()
+        self._entity_panel.toggle_requested.connect(self._toggle_entity)
 
         self._apply_tray_icon_theme()
 
@@ -42,10 +45,14 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
 
         self._icon_cache: dict[str, QtGui.QIcon] = {}
         self._entity_states: dict[str, dict[str, Any]] = {}
+        self._panel_refresh_timer = QtCore.QTimer(self)
+        self._panel_refresh_timer.setTimerType(QtCore.Qt.TimerType.VeryCoarseTimer)
+        self._panel_refresh_timer.timeout.connect(self.update_entities)
 
         self.update_entities()
         self._initialize_notifications()
         QtCore.QTimer.singleShot(0, self._check_notifications)
+        self._apply_panel_refresh_interval()
 
     # ----- Menu construction ------------------------------------------------
 
@@ -56,6 +63,7 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             if action not in (self._settings_action, self._exit_action):
                 self._menu.removeAction(action)
 
+        panel_entities: list[PanelEntity] = []
         if self._config.entities:
             client: HomeAssistantClient | None = None
             try:
@@ -87,6 +95,13 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
                     action = QtGui.QAction(friendly_name, self._menu)
                 action.triggered.connect(lambda checked=False, e=entity_id: self._toggle_entity(e))
                 self._menu.insertAction(self._settings_action, action)
+                panel_entities.append(
+                    PanelEntity(
+                        entity_id=entity_id,
+                        friendly_name=friendly_name,
+                        icon=icon,
+                    )
+                )
             self._menu.insertSeparator(self._settings_action)
         else:
             self._entity_states = {}
@@ -95,9 +110,12 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             self._menu.insertAction(self._settings_action, placeholder)
             self._menu.insertSeparator(self._settings_action)
 
+        self._entity_panel.update_entities(panel_entities)
+
     # ----- Slots ------------------------------------------------------------
 
     def _open_settings(self) -> None:
+        self._entity_panel.hide_panel()
         dialog = SettingsDialog(self._config, None)
         dialog.configuration_changed.connect(self._on_configuration_changed)
         dialog.exec()
@@ -106,6 +124,8 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         self._config = config
         self._icon_cache.clear()
         self._apply_tray_icon_theme()
+        self._apply_panel_refresh_interval()
+        self._entity_panel.hide_panel()
         self.update_entities()
         self._initialize_notifications()
         self._check_notifications()
@@ -123,10 +143,16 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             self.showMessage("Home Assistant", str(exc), QtWidgets.QSystemTrayIcon.MessageIcon.Warning)
 
     def _on_activated(self, reason: QtWidgets.QSystemTrayIcon.ActivationReason) -> None:
-        if reason == QtWidgets.QSystemTrayIcon.ActivationReason.Trigger:
+        if reason in (
+            QtWidgets.QSystemTrayIcon.ActivationReason.Trigger,
+            QtWidgets.QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._toggle_panel()
+        elif reason == QtWidgets.QSystemTrayIcon.ActivationReason.Context:
             self.contextMenu().popup(QtGui.QCursor.pos())
 
     def _quit(self) -> None:
+        self._entity_panel.hide_panel()
         self.hide()
         self._app.quit()
 
@@ -255,6 +281,37 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         if darkdetect.isDark():
             return QtGui.QIcon(get_resource_path("home-assistant-dark.svg"))
         return QtGui.QIcon(get_resource_path("home-assistant-light.svg"))
+
+    def _apply_panel_refresh_interval(self) -> None:
+        minutes = max(1, int(self._config.panel_refresh_minutes or 5))
+        interval_ms = minutes * 60_000
+        self._panel_refresh_timer.stop()
+        self._panel_refresh_timer.start(interval_ms)
+
+    def _toggle_panel(self) -> None:
+        if self._entity_panel.isVisible():
+            self._entity_panel.hide_panel()
+            return
+        self._position_panel()
+        self._entity_panel.show_panel()
+
+    def _position_panel(self) -> None:
+        panel = self._entity_panel
+        panel.adjustSize()
+        size = panel.size()
+        cursor_pos = QtGui.QCursor.pos()
+        screen = QtGui.QGuiApplication.screenAt(cursor_pos)
+        if screen is None:
+            screen = QtGui.QGuiApplication.primaryScreen()
+        if screen is not None:
+            geometry = screen.availableGeometry()
+        else:
+            geometry = QtCore.QRect(0, 0, size.width(), size.height())
+        available_right = geometry.left() + geometry.width() - size.width()
+        available_bottom = geometry.top() + geometry.height() - size.height()
+        x = max(geometry.left(), min(cursor_pos.x() - size.width() // 2, available_right))
+        y = max(geometry.top(), min(cursor_pos.y(), available_bottom))
+        panel.move(x, y)
 
 
 

@@ -59,6 +59,11 @@ class SettingsDialog(QtWidgets.QDialog):
         if index < 0:
             index = 0
         self._icon_theme_select.setCurrentIndex(index)
+        self._panel_refresh_input = QtWidgets.QSpinBox()
+        self._panel_refresh_input.setRange(1, 1440)
+        self._panel_refresh_input.setSuffix(" min")
+        refresh_minutes = max(1, int(self._config.panel_refresh_minutes or 5))
+        self._panel_refresh_input.setValue(refresh_minutes)
         self._search_input = QtWidgets.QLineEdit()
         self._search_input.setPlaceholderText("Search entities…")
         self._available_list = QtWidgets.QListWidget()
@@ -86,6 +91,7 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow("HTTP Proxy", self._http_proxy_input)
         form.addRow("HTTPS Proxy", self._https_proxy_input)
         form.addRow("Tray icon theme", self._icon_theme_select)
+        form.addRow("Panel refresh interval", self._panel_refresh_input)
 
         lists_layout = QtWidgets.QHBoxLayout()
         lists_layout.addWidget(self._available_list)
@@ -193,6 +199,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self._config.https_proxy = self._https_proxy_input.text().strip()
         theme_data = self._icon_theme_select.currentData()
         self._config.tray_icon_theme = str(theme_data) if theme_data else "auto"
+        self._config.panel_refresh_minutes = max(1, int(self._panel_refresh_input.value()))
         entities: list[str] = []
         for i in range(self._selected_list.count()):
             item = self._selected_list.item(i)
