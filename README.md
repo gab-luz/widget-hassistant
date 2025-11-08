@@ -4,10 +4,16 @@ A simple PyQt-based system tray widget for Linux (tested with Hyprland-compatibl
 
 ## Features
 
-- Runs as a Linux system tray (StatusNotifier/AppIndicator) application
+- Runs as a Windows/Linux (hyprland/gnome/xfce/kde/lxde and so on) system tray (StatusNotifier/AppIndicator) application
 - Configurable Home Assistant instance URL and long-lived access token
 - Pick which entities show up in the tray menu via the settings dialog
 - Quickly toggle the configured entities by selecting them from the tray menu
+
+## Roadmap
+- Display notifications from your Home Assistant instance
+- Notifications with image support (e.g. motion detect on camera displays notification with a camera screenshot)
+- Notifications with actions (e.g. open garage door/close garage door)
+- Work as a home assistant agent so that you can perform actions for this device from your home assistant device, if enabled, of course
 
 ## Requirements
 
