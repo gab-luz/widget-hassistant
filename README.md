@@ -2,6 +2,10 @@
 
 A simple PyQt-based system tray widget for Linux (tested with Hyprland-compatible compositors) that lets you toggle Home Assistant entities directly from the tray menu. The widget also provides a configuration dialog for updating the Home Assistant connection details and choosing which entities appear in the menu.
 
+<img width="523" height="224" alt="image" src="https://github.com/user-attachments/assets/d22dd03c-a948-46c7-8695-d58023f9f40a" />
+<img width="928" height="908" alt="image" src="https://github.com/user-attachments/assets/b6f235b9-2447-4b74-ab56-c13e55825113" />
+
+
 ## Features
 
 - Runs as a Windows/Linux (hyprland/gnome/xfce/kde/lxde and so on) system tray (StatusNotifier/AppIndicator) application
