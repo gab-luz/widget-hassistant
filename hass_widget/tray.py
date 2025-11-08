@@ -16,12 +16,7 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
     """Tray icon that exposes Home Assistant entities as menu actions."""
 
     def __init__(self, config: WidgetConfig, app: QtWidgets.QApplication) -> None:
-        if darkdetect.isDark():
-            icon = QtGui.QIcon(get_resource_path("home-assistant-dark.svg"))
-        else:
-            icon = QtGui.QIcon(get_resource_path("home-assistant-light.svg"))
-
-        super().__init__(icon, parent=app)
+        super().__init__(QtGui.QIcon(), parent=app)
         self._app = app
         self._config = config
         self._menu = QtWidgets.QMenu()
@@ -30,6 +25,8 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         self.activated.connect(self._on_activated)
 
         self._settings_dialog: SettingsDialog | None = None
+
+        self._apply_tray_icon_theme()
 
         self._settings_action = self._menu.addAction("Settings…")
         self._settings_action.triggered.connect(self._open_settings)
@@ -108,6 +105,7 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
     def _on_configuration_changed(self, config: WidgetConfig) -> None:
         self._config = config
         self._icon_cache.clear()
+        self._apply_tray_icon_theme()
         self.update_entities()
         self._initialize_notifications()
         self._check_notifications()
@@ -239,6 +237,24 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             icon = QtGui.QIcon()
         self._icon_cache[cache_key] = icon
         return None if icon.isNull() else icon
+
+    def _apply_tray_icon_theme(self) -> None:
+        """Set the tray icon according to the configured theme preference."""
+
+        self.setIcon(self._choose_tray_icon())
+
+    def _choose_tray_icon(self) -> QtGui.QIcon:
+        """Return the QIcon to use for the tray icon based on preferences."""
+
+        theme = (self._config.tray_icon_theme or "auto").lower()
+        if theme == "dark":
+            return QtGui.QIcon(get_resource_path("home-assistant-dark.svg"))
+        if theme == "light":
+            return QtGui.QIcon(get_resource_path("home-assistant-light.svg"))
+        # Auto-detect falls back to darkdetect and defaults to light.
+        if darkdetect.isDark():
+            return QtGui.QIcon(get_resource_path("home-assistant-dark.svg"))
+        return QtGui.QIcon(get_resource_path("home-assistant-light.svg"))
 
 
 

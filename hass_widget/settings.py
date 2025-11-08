@@ -27,6 +27,12 @@ class SettingsDialog(QtWidgets.QDialog):
 
     configuration_changed = QtCore.pyqtSignal(WidgetConfig)
 
+    _ICON_THEME_OPTIONS: list[tuple[str, str]] = [
+        ("auto", "Auto detect"),
+        ("light", "Light icon"),
+        ("dark", "Dark icon"),
+    ]
+
     def __init__(self, config: WidgetConfig, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Home Assistant Widget Settings")
@@ -45,6 +51,14 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self._http_proxy_input = QtWidgets.QLineEdit(self._config.http_proxy)
         self._https_proxy_input = QtWidgets.QLineEdit(self._config.https_proxy)
+        self._icon_theme_select = QtWidgets.QComboBox()
+        for value, label in self._ICON_THEME_OPTIONS:
+            self._icon_theme_select.addItem(label, value)
+        current_theme = self._config.tray_icon_theme or "auto"
+        index = self._icon_theme_select.findData(current_theme)
+        if index < 0:
+            index = 0
+        self._icon_theme_select.setCurrentIndex(index)
         self._search_input = QtWidgets.QLineEdit()
         self._search_input.setPlaceholderText("Search entities…")
         self._available_list = QtWidgets.QListWidget()
@@ -71,6 +85,7 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow("API Token", self._token_input)
         form.addRow("HTTP Proxy", self._http_proxy_input)
         form.addRow("HTTPS Proxy", self._https_proxy_input)
+        form.addRow("Tray icon theme", self._icon_theme_select)
 
         lists_layout = QtWidgets.QHBoxLayout()
         lists_layout.addWidget(self._available_list)
@@ -176,6 +191,8 @@ class SettingsDialog(QtWidgets.QDialog):
         self._config.api_token = self._token_input.text().strip()
         self._config.http_proxy = self._http_proxy_input.text().strip()
         self._config.https_proxy = self._https_proxy_input.text().strip()
+        theme_data = self._icon_theme_select.currentData()
+        self._config.tray_icon_theme = str(theme_data) if theme_data else "auto"
         entities: list[str] = []
         for i in range(self._selected_list.count()):
             item = self._selected_list.item(i)

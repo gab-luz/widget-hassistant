@@ -20,6 +20,7 @@ class WidgetConfig:
     entities: List[str] = field(default_factory=list)
     http_proxy: str = ""
     https_proxy: str = ""
+    tray_icon_theme: str = "auto"
 
     def to_dict(self) -> dict:
         return {
@@ -28,6 +29,7 @@ class WidgetConfig:
             "entities": self.entities,
             "http_proxy": self.http_proxy,
             "https_proxy": self.https_proxy,
+            "tray_icon_theme": self.tray_icon_theme,
         }
 
     @classmethod
@@ -40,6 +42,7 @@ class WidgetConfig:
             entities=list(dict.fromkeys(data.get("entities", []))),
             http_proxy=data.get("http_proxy", ""),
             https_proxy=data.get("https_proxy", ""),
+            tray_icon_theme=data.get("tray_icon_theme", "auto") or "auto",
         )
 
     def build_proxies(self) -> dict[str, str]:
