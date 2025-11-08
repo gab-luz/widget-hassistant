@@ -33,6 +33,8 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         self.setToolTip("Home Assistant")
         self.activated.connect(self._on_activated)
 
+        self._settings_dialog: SettingsDialog | None = None
+
         self._settings_action = self._menu.addAction("Settings…")
         self._settings_action.triggered.connect(self._open_settings)
         self._menu.addSeparator()

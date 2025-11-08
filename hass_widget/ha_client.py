@@ -37,8 +37,8 @@ class HomeAssistantClient:
                 f"Failed to connect to Home Assistant: {response.status_code} {response.text}"
             )
 
-    def list_entities(self) -> List[Tuple[str, str]]:
-        """Return available entities as (entity_id, friendly_name)."""
+    def list_entity_states(self) -> List[Dict[str, Any]]:
+        """Return a list of all entity states."""
         response = requests.get(
             f"{self.base_url}/api/states",
             headers=self._headers,
@@ -50,15 +50,10 @@ class HomeAssistantClient:
                 f"Unable to list entities: {response.status_code} {response.text}"
             )
         data = response.json()
-        entities: List[Tuple[str, str]] = []
-        for item in data:
-            entity_id = item.get("entity_id")
-            if not entity_id:
-                continue
-            friendly_name = item.get("attributes", {}).get("friendly_name", entity_id)
-            entities.append((entity_id, friendly_name))
-        entities.sort(key=lambda pair: pair[1].lower())
-        return entities
+        return sorted(
+            data,
+            key=lambda item: item.get("attributes", {}).get("friendly_name", item.get("entity_id")),
+        )
 
     def toggle_entity(self, entity_id: str) -> None:
         """Trigger the toggle service for the provided entity."""
