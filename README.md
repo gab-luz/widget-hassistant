@@ -2,16 +2,24 @@
 
 A PyQt-based system tray widget for Linux (tested with Hyprland-compatible compositors) that lets you interact with your Home Assistant instance from the desktop. The widget provides quick entity toggles, rich notifications, and a configuration dialog for tailoring the experience to your environment.
 
+<img width="523" height="224" alt="image" src="https://github.com/user-attachments/assets/d22dd03c-a948-46c7-8695-d58023f9f40a" />
+
 ## Features
 
-- Runs as a Linux system tray (StatusNotifier/AppIndicator) application with light/dark/auto tray icon themes
-- Configurable Home Assistant instance URL, access token, and proxy settings
-- Pick which entities show up in the tray menu, complete with Home Assistant-provided icons or cached fallbacks
+- Runs as a Windows/Linux (hyprland/gnome/xfce/kde/lxde and so on) system tray (StatusNotifier/AppIndicator) application
+- Configurable Home Assistant instance URL and long-lived access token
+- Pick which entities show up in the tray menu via the settings dialog
 - Quickly toggle the configured entities by selecting them from the tray menu
 - Global entity cache that refreshes on a configurable cadence and powers both the tray menu and the entity panel without repeatedly downloading data
 - Left-click the tray icon to open an always-on-top floating entities panel (with fade-in/out animations) that lists every entity, includes a search bar, displays icons, and lets you control entities directly
 - Receive Home Assistant admin notifications on the desktop with a one-click test notification option
 - Optional Home Assistant agent mode that exposes device telemetry (disk, memory, GPU, uptime, etc.) back to Home Assistant for use in automations
+
+## Roadmap
+- Display notifications from your Home Assistant instance
+- Notifications with image support (e.g. motion detect on camera displays notification with a camera screenshot)
+- Notifications with actions (e.g. open garage door/close garage door)
+- Work as a home assistant agent so that you can perform actions for this device from your home assistant device, if enabled, of course
 
 ## Requirements
 
