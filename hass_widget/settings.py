@@ -6,6 +6,7 @@ from typing import Callable, List
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from .agent_metrics import AGENT_METRIC_OPTIONS
 from .config import WidgetConfig, save_config
 from .ha_client import HomeAssistantClient, HomeAssistantError
 from .icons import icon_from_bytes, load_domain_icon
@@ -69,6 +70,18 @@ class SettingsDialog(QtWidgets.QDialog):
         self._available_list = QtWidgets.QListWidget()
         self._selected_list = QtWidgets.QListWidget()
 
+        self._notifications_checkbox = QtWidgets.QCheckBox("Receive admin notifications")
+        self._notifications_checkbox.setChecked(
+            bool(self._config.receive_admin_notifications)
+        )
+        self._test_notification_button = QtWidgets.QPushButton("Send test notification")
+        self._agent_checkbox = QtWidgets.QCheckBox(
+            "Use this widget as a Home Assistant agent"
+        )
+        self._agent_checkbox.setChecked(bool(self._config.use_agent))
+        self._agent_name_input = QtWidgets.QLineEdit(self._config.agent_name)
+        self._agent_name_input.setPlaceholderText("Friendly name for this device")
+
         self._add_button = QtWidgets.QPushButton("Add →")
         self._remove_button = QtWidgets.QPushButton("← Remove")
         self._refresh_button = QtWidgets.QPushButton("Refresh from Home Assistant")
@@ -78,13 +91,21 @@ class SettingsDialog(QtWidgets.QDialog):
             | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
 
+        self._tabs = QtWidgets.QTabWidget()
+        self._agent_metric_checks: dict[str, QtWidgets.QCheckBox] = {}
+
         self._build_layout()
         self._bind_events()
         self._populate_selected()
+        self._update_agent_fields()
+        self._refresh_test_notification_state()
 
     # ----- UI Construction -------------------------------------------------
 
     def _build_layout(self) -> None:
+        general_widget = QtWidgets.QWidget()
+        general_layout = QtWidgets.QVBoxLayout(general_widget)
+
         form = QtWidgets.QFormLayout()
         form.addRow("Instance URL", self._url_input)
         form.addRow("API Token", self._token_input)
@@ -92,6 +113,21 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow("HTTPS Proxy", self._https_proxy_input)
         form.addRow("Tray icon theme", self._icon_theme_select)
         form.addRow("Panel refresh interval", self._panel_refresh_input)
+
+        notifications_row = QtWidgets.QHBoxLayout()
+        notifications_row.addWidget(self._notifications_checkbox)
+        notifications_row.addStretch()
+        notifications_row.addWidget(self._test_notification_button)
+        form.addRow("Admin notifications", notifications_row)
+
+        form.addRow("Agent integration", self._agent_checkbox)
+        self._agent_name_container = QtWidgets.QWidget()
+        agent_name_layout = QtWidgets.QHBoxLayout(self._agent_name_container)
+        agent_name_layout.setContentsMargins(0, 0, 0, 0)
+        agent_name_layout.addWidget(self._agent_name_input)
+        form.addRow("Agent friendly name", self._agent_name_container)
+
+        general_layout.addLayout(form)
 
         lists_layout = QtWidgets.QHBoxLayout()
         lists_layout.addWidget(self._available_list)
@@ -105,15 +141,37 @@ class SettingsDialog(QtWidgets.QDialog):
 
         lists_layout.addWidget(self._selected_list)
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(self._refresh_button)
-        layout.addWidget(self._search_input)
-        layout.addLayout(lists_layout)
-        layout.addWidget(self._button_box)
+        general_layout.addWidget(self._refresh_button)
+        general_layout.addWidget(self._search_input)
+        general_layout.addLayout(lists_layout)
 
         self._available_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.MultiSelection)
         self._selected_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.MultiSelection)
+
+        agent_widget = QtWidgets.QWidget()
+        agent_layout = QtWidgets.QVBoxLayout(agent_widget)
+        description = QtWidgets.QLabel(
+            "Select which device details should be exposed to Home Assistant when this "
+            "widget is acting as an agent."
+        )
+        description.setWordWrap(True)
+        agent_layout.addWidget(description)
+
+        for option in AGENT_METRIC_OPTIONS:
+            checkbox = QtWidgets.QCheckBox(option.label)
+            checkbox.setToolTip(option.description)
+            checkbox.setChecked(option.key in self._config.agent_metrics)
+            agent_layout.addWidget(checkbox)
+            self._agent_metric_checks[option.key] = checkbox
+
+        agent_layout.addStretch()
+
+        self._tabs.addTab(general_widget, "General")
+        self._agent_tab_index = self._tabs.addTab(agent_widget, "Agent data")
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(self._tabs)
+        layout.addWidget(self._button_box)
 
     # ----- Event Handling --------------------------------------------------
 
@@ -124,6 +182,13 @@ class SettingsDialog(QtWidgets.QDialog):
         self._search_input.textChanged.connect(self._apply_search_filter)
         self._button_box.accepted.connect(self._save)
         self._button_box.rejected.connect(self.reject)
+        self._notifications_checkbox.toggled.connect(
+            self._refresh_test_notification_state
+        )
+        self._test_notification_button.clicked.connect(self._send_test_notification)
+        self._agent_checkbox.toggled.connect(self._update_agent_fields)
+        self._url_input.textChanged.connect(self._refresh_test_notification_state)
+        self._token_input.textChanged.connect(self._refresh_test_notification_state)
 
     def _populate_selected(self) -> None:
         self._selected_list.clear()
@@ -135,6 +200,47 @@ class SettingsDialog(QtWidgets.QDialog):
             if icon is not None and not icon.isNull():
                 item.setIcon(icon)
             self._selected_list.addItem(item)
+
+    def _update_agent_fields(self) -> None:
+        enabled = self._agent_checkbox.isChecked()
+        self._agent_name_container.setVisible(enabled)
+        self._agent_name_input.setEnabled(enabled)
+        self._tabs.setTabEnabled(self._agent_tab_index, enabled)
+        for checkbox in self._agent_metric_checks.values():
+            checkbox.setEnabled(enabled)
+        if not enabled:
+            self._tabs.setCurrentIndex(0)
+
+    def _refresh_test_notification_state(self) -> None:
+        enabled = (
+            self._notifications_checkbox.isChecked()
+            and bool(self._url_input.text().strip())
+            and bool(self._token_input.text().strip())
+        )
+        self._test_notification_button.setEnabled(enabled)
+
+    def _send_test_notification(self) -> None:
+        client = HomeAssistantClient(
+            self._url_input.text(),
+            self._token_input.text(),
+            proxies=self._current_proxies() or None,
+        )
+        notification_id = "hassistant_widget_test"
+        try:
+            client.create_notification(
+                "Home Assistant Widget",
+                "Test notification from the desktop widget.",
+                notification_id=notification_id,
+            )
+        except HomeAssistantError as exc:
+            QtWidgets.QMessageBox.critical(self, "Home Assistant", str(exc))
+            return
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Home Assistant",
+            "Test notification sent. Check your Home Assistant notifications panel.",
+        )
 
     def _add_entities(self) -> None:
         for item in self._available_list.selectedItems():
@@ -200,6 +306,23 @@ class SettingsDialog(QtWidgets.QDialog):
         theme_data = self._icon_theme_select.currentData()
         self._config.tray_icon_theme = str(theme_data) if theme_data else "auto"
         self._config.panel_refresh_minutes = max(1, int(self._panel_refresh_input.value()))
+        self._config.receive_admin_notifications = self._notifications_checkbox.isChecked()
+        agent_enabled = self._agent_checkbox.isChecked()
+        self._config.use_agent = agent_enabled
+        agent_name = self._agent_name_input.text().strip()
+        if agent_enabled and not agent_name:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Home Assistant",
+                "Please provide a friendly name for this device before enabling the agent.",
+            )
+            return
+        self._config.agent_name = agent_name
+        metrics: list[str] = []
+        for key, checkbox in self._agent_metric_checks.items():
+            if checkbox.isChecked():
+                metrics.append(key)
+        self._config.agent_metrics = list(dict.fromkeys(metrics))
         entities: list[str] = []
         for i in range(self._selected_list.count()):
             item = self._selected_list.item(i)

@@ -6,6 +6,7 @@ from typing import Any, Callable
 import darkdetect
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from .agent_metrics import collect_metrics, get_metric_option, slugify_agent_name
 from .config import WidgetConfig
 from .entity_panel import EntitiesPanel, PanelEntity
 from .ha_client import HomeAssistantClient, HomeAssistantError
@@ -41,7 +42,6 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         self._notification_timer = QtCore.QTimer(self)
         self._notification_timer.setInterval(30_000)
         self._notification_timer.timeout.connect(self._check_notifications)
-        self._notification_timer.start()
 
         self._icon_cache: dict[str, QtGui.QIcon] = {}
         self._entity_states: dict[str, dict[str, Any]] = {}
@@ -49,10 +49,16 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
         self._panel_refresh_timer.setTimerType(QtCore.Qt.TimerType.VeryCoarseTimer)
         self._panel_refresh_timer.timeout.connect(self.update_entities)
 
+        self._agent_timer = QtCore.QTimer(self)
+        self._agent_timer.setInterval(60_000)
+        self._agent_timer.setTimerType(QtCore.Qt.TimerType.CoarseTimer)
+        self._agent_timer.timeout.connect(self._publish_agent_metrics)
+        self._agent_last_payloads: dict[str, tuple[str, tuple[tuple[str, Any], ...]]] = {}
+
         self.update_entities()
-        self._initialize_notifications()
-        QtCore.QTimer.singleShot(0, self._check_notifications)
         self._apply_panel_refresh_interval()
+        self._apply_notification_preference()
+        self._apply_agent_settings()
 
     # ----- Menu construction ------------------------------------------------
 
@@ -146,12 +152,13 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
     def _on_configuration_changed(self, config: WidgetConfig) -> None:
         self._config = config
         self._icon_cache.clear()
+        self._agent_last_payloads.clear()
         self._apply_tray_icon_theme()
         self._apply_panel_refresh_interval()
         self._entity_panel.hide_panel()
         self.update_entities()
-        self._initialize_notifications()
-        self._check_notifications()
+        self._apply_notification_preference()
+        self._apply_agent_settings()
 
     def _toggle_entity(self, entity_id: str) -> None:
         try:
@@ -203,8 +210,23 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             if notification_id:
                 self._known_notifications.add(notification_id)
 
+    def _apply_notification_preference(self) -> None:
+        if not self._config.receive_admin_notifications:
+            self._notification_timer.stop()
+            self._known_notifications.clear()
+            return
+
+        if not self._notification_timer.isActive():
+            self._notification_timer.start()
+        self._initialize_notifications()
+        QtCore.QTimer.singleShot(0, self._check_notifications)
+
     def _check_notifications(self) -> None:
-        if not self._config.base_url or not self._config.api_token:
+        if (
+            not self._config.receive_admin_notifications
+            or not self._config.base_url
+            or not self._config.api_token
+        ):
             return
         try:
             client = self._create_client()
@@ -229,6 +251,48 @@ class TrayIcon(QtWidgets.QSystemTrayIcon):
             self._known_notifications.intersection_update(current_ids)
         else:
             self._known_notifications.clear()
+
+    def _apply_agent_settings(self) -> None:
+        if self._config.use_agent and self._config.agent_name.strip():
+            if not self._agent_timer.isActive():
+                self._agent_timer.start()
+            QtCore.QTimer.singleShot(0, self._publish_agent_metrics)
+        else:
+            self._agent_timer.stop()
+            self._agent_last_payloads.clear()
+
+    def _publish_agent_metrics(self) -> None:
+        if not self._config.use_agent:
+            return
+        agent_name = self._config.agent_name.strip()
+        if not agent_name:
+            return
+        metrics = collect_metrics(self._config.agent_metrics)
+        if not metrics:
+            return
+        slug = slugify_agent_name(agent_name)
+        if not slug:
+            return
+        try:
+            client = self._create_client()
+        except HomeAssistantError:
+            return
+
+        for key, metric in metrics.items():
+            entity_id = f"sensor.{slug}_{key}"
+            option = get_metric_option(key)
+            attributes = dict(metric.attributes)
+            if option is not None:
+                attributes.setdefault("friendly_name", f"{agent_name} {option.label}")
+            attributes.setdefault("source", "Home Assistant Widget")
+            payload_signature = (metric.state, tuple(sorted(attributes.items())))
+            if self._agent_last_payloads.get(entity_id) == payload_signature:
+                continue
+            try:
+                client.set_state(entity_id, metric.state, attributes)
+            except HomeAssistantError:
+                continue
+            self._agent_last_payloads[entity_id] = payload_signature
 
     def _entity_icon(self, entity_id: str, client: HomeAssistantClient | None) -> QtGui.QIcon | None:
         icon = None

@@ -97,6 +97,45 @@ class HomeAssistantClient:
                 f"Failed to call {domain}.{service}: {response.status_code} {response.text}"
             )
 
+    def create_notification(
+        self, title: str, message: str, notification_id: str | None = None
+    ) -> None:
+        payload: Dict[str, Any] = {"title": title, "message": message}
+        if notification_id:
+            payload["notification_id"] = notification_id
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/services/persistent_notification/create",
+                headers=self._headers,
+                json=payload,
+                timeout=10,
+                proxies=self._proxies,
+            )
+        except requests.RequestException as exc:  # pragma: no cover - network error
+            raise HomeAssistantError(f"Failed to send notification: {exc}") from exc
+        if response.status_code not in (200, 201):
+            raise HomeAssistantError(
+                f"Failed to send notification: {response.status_code} {response.text}"
+            )
+
+    def set_state(
+        self, entity_id: str, state: str, attributes: Dict[str, Any] | None = None
+    ) -> None:
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/states/{entity_id}",
+                headers=self._headers,
+                json={"state": state, "attributes": attributes or {}},
+                timeout=10,
+                proxies=self._proxies,
+            )
+        except requests.RequestException as exc:  # pragma: no cover - network error
+            raise HomeAssistantError(f"Failed to update {entity_id}: {exc}") from exc
+        if response.status_code not in (200, 201):
+            raise HomeAssistantError(
+                f"Failed to update {entity_id}: {response.status_code} {response.text}"
+            )
+
     def list_notifications(self) -> List[Dict[str, Any]]:
         """Return the list of persistent notifications."""
 
